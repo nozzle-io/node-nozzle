@@ -25,12 +25,29 @@ function run(command, args, options = {}) {
   }
 }
 
-function node_include_dir() {
-  return path.resolve(path.dirname(process.execPath), '..', 'include', 'node');
+function first_existing(paths, label) {
+  for (const candidate of paths) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`${label} not found; checked ${paths.join(', ')}`);
 }
 
-function node_lib_dir() {
-  return path.dirname(process.execPath);
+function node_include_dir() {
+  const exe_dir = path.dirname(process.execPath);
+  return first_existing([
+    path.join(exe_dir, 'include', 'node'),
+    path.resolve(exe_dir, '..', 'include', 'node')
+  ], 'Node include directory');
+}
+
+function node_lib_path() {
+  const exe_dir = path.dirname(process.execPath);
+  return first_existing([
+    path.join(exe_dir, 'node.lib'),
+    path.resolve(exe_dir, '..', 'node.lib')
+  ], 'node.lib');
 }
 
 function to_obj_name(source) {
@@ -81,8 +98,6 @@ function build_windows() {
     '/I', node_include_dir()
   ];
   const defines = [
-    '/DNOMINMAX',
-    '/DWIN32_LEAN_AND_MEAN',
     '/DNAPI_VERSION=8',
     '/DNOZZLE_PLATFORM_WINDOWS=1',
     '/DNOZZLE_PLATFORM_MACOS=0',
@@ -90,8 +105,7 @@ function build_windows() {
     '/DNOZZLE_HAS_D3D11=1',
     '/DNOZZLE_HAS_METAL=0',
     '/DNOZZLE_HAS_DMA_BUF=0',
-    '/DNOZZLE_HAS_OPENGL=0',
-    '/DNOZZLE_HAS_EXCEPTIONS=0'
+    '/DNOZZLE_HAS_OPENGL=0'
   ];
   const compile_flags = [
     '/nologo',
@@ -117,7 +131,7 @@ function build_windows() {
     '/dll',
     '/out:' + addon_path,
     ...objects,
-    path.join(node_lib_dir(), 'node.lib'),
+    node_lib_path(),
     'd3d11.lib',
     'dxgi.lib',
     'dxguid.lib',
