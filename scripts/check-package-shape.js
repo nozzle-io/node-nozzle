@@ -16,6 +16,7 @@ const required = [
   'types/index.d.ts',
   'test/load.test.js',
   'test/discovery.test.js',
+  'scripts/run-tests.js',
   '.github/workflows/ci.yml',
   'deps/nozzle/include/nozzle/nozzle_c.h',
 ];
@@ -47,11 +48,11 @@ for (const phrase of [
 
 const npmCache = path.join(root, '.build', 'npm-cache');
 fs.mkdirSync(npmCache, { recursive: true });
-const npm_command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const pack = spawnSync(npm_command, ['pack', '--dry-run', '--json'], {
+const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
   cwd: root,
   encoding: 'utf8',
   env: { ...process.env, npm_config_cache: npmCache },
+  shell: process.platform === 'win32',
 });
 if (pack.error) {
   throw pack.error;
