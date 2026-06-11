@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const https = require('node:https');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
@@ -25,36 +26,105 @@ function run(command, args, options = {}) {
   }
 }
 
-function first_existing(paths, label) {
+function first_existing(paths) {
   for (const candidate of paths) {
     if (fs.existsSync(candidate)) {
       return candidate;
     }
   }
-  throw new Error(`${label} not found; checked ${paths.join(', ')}`);
+  return null;
 }
 
-function node_include_dir() {
+function download_file(url, destination) {
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  return new Promise((resolve, reject) => {
+    const request = https.get(url, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        response.resume();
+        download_file(new URL(response.headers.location, url).toString(), destination).then(resolve, reject);
+        return;
+      }
+      if (response.statusCode !== 200) {
+        response.resume();
+        reject(new Error(`download failed: ${url} returned HTTP ${response.statusCode}`));
+        return;
+      }
+      const file = fs.createWriteStream(destination);
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close(resolve);
+      });
+      file.on('error', reject);
+    });
+    request.on('error', reject);
+  });
+}
+
+function node_windows_arch() {
+  if (process.arch === 'x64') {
+    return 'x64';
+  }
+  if (process.arch === 'arm64') {
+    return 'arm64';
+  }
+  throw new Error(`unsupported Windows Node architecture: ${process.arch}`);
+}
+
+async function ensure_windows_node_headers() {
   const exe_dir = path.dirname(process.execPath);
-  return first_existing([
+  const version = process.versions.node;
+  const downloaded_root = path.join(build_dir, 'node-headers', `node-v${version}`);
+  const candidates = [
     path.join(exe_dir, 'include', 'node'),
-    path.resolve(exe_dir, '..', 'include', 'node')
-  ], 'Node include directory');
+    path.resolve(exe_dir, '..', 'include', 'node'),
+    path.join(downloaded_root, 'include', 'node')
+  ];
+
+  const existing = first_existing(candidates);
+  if (existing) {
+    return existing;
+  }
+
+  const archive = path.join(build_dir, 'node-headers', `node-v${version}-headers.tar.gz`);
+  const url = `https://nodejs.org/download/release/v${version}/node-v${version}-headers.tar.gz`;
+  console.log(`Downloading Node headers from ${url}`);
+  await download_file(url, archive);
+  run('tar', ['-xzf', archive, '-C', path.dirname(downloaded_root)]);
+
+  const extracted = first_existing(candidates);
+  if (!extracted) {
+    throw new Error(`Node include directory not found after header download; checked ${candidates.join(', ')}`);
+  }
+  return extracted;
 }
 
-function node_lib_path() {
+async function ensure_windows_node_lib() {
   const exe_dir = path.dirname(process.execPath);
-  return first_existing([
+  const version = process.versions.node;
+  const arch = node_windows_arch();
+  const downloaded = path.join(build_dir, 'node-headers', `node-v${version}`, `win-${arch}`, 'node.lib');
+  const candidates = [
     path.join(exe_dir, 'node.lib'),
-    path.resolve(exe_dir, '..', 'node.lib')
-  ], 'node.lib');
+    path.resolve(exe_dir, '..', 'node.lib'),
+    downloaded
+  ];
+
+  const existing = first_existing(candidates);
+  if (existing) {
+    return existing;
+  }
+
+  const url = `https://nodejs.org/download/release/v${version}/win-${arch}/node.lib`;
+  console.log(`Downloading node.lib from ${url}`);
+  await download_file(url, downloaded);
+  return downloaded;
 }
 
 function to_obj_name(source) {
   return path.join(build_dir, source.replace(/[\\/:.]/g, '_') + '.obj');
 }
 
-function build_windows() {
+async function build_windows() {
   if (!process.env.VCToolsInstallDir && !process.env.VSINSTALLDIR) {
     throw new Error('MSVC environment is not configured; run under Developer Command Prompt or ilammy/msvc-dev-cmd in GitHub Actions');
   }
@@ -91,11 +161,14 @@ function build_windows() {
   ];
 
   const sources = common_sources.concat(windows_sources);
+  const node_include = await ensure_windows_node_headers();
+  const node_lib = await ensure_windows_node_lib();
+
   const includes = [
     '/I', path.join(root, nozzle, 'include'),
     '/I', path.join(root, nozzle, 'src'),
     '/I', path.join(root, nozzle, 'libs', 'plog', 'include'),
-    '/I', node_include_dir()
+    '/I', node_include
   ];
   const defines = [
     '/DNAPI_VERSION=8',
@@ -131,7 +204,7 @@ function build_windows() {
     '/dll',
     '/out:' + addon_path,
     ...objects,
-    node_lib_path(),
+    node_lib,
     'd3d11.lib',
     'dxgi.lib',
     'dxguid.lib',
@@ -141,7 +214,7 @@ function build_windows() {
   ]);
 }
 
-function main() {
+async function main() {
   if (process.argv.includes('--clean')) {
     fs.rmSync(build_dir, { recursive: true, force: true });
     fs.rmSync(path.join(root, 'build'), { recursive: true, force: true });
@@ -149,11 +222,14 @@ function main() {
   }
 
   if (process.platform === 'win32') {
-    build_windows();
+    await build_windows();
     return;
   }
 
   run('make', []);
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
