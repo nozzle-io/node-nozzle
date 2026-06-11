@@ -47,11 +47,15 @@ for (const phrase of [
 
 const npmCache = path.join(root, '.build', 'npm-cache');
 fs.mkdirSync(npmCache, { recursive: true });
-const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+const npm_command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const pack = spawnSync(npm_command, ['pack', '--dry-run', '--json'], {
   cwd: root,
   encoding: 'utf8',
   env: { ...process.env, npm_config_cache: npmCache },
 });
+if (pack.error) {
+  throw pack.error;
+}
 assert.equal(pack.status, 0, pack.stderr || pack.stdout);
 const files = JSON.parse(pack.stdout)[0].files.map((entry) => entry.path).sort();
 for (const rel of ['README.md', 'LICENSE', 'src/js/index.js', 'types/index.d.ts', 'build/Release/nozzle_node.node']) {
