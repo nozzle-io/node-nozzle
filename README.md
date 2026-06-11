@@ -15,7 +15,7 @@ No npm publication has been performed for this initial implementation.
 | Node baseline | Node 20+ with N-API baseline 8 |
 | macOS build/test | Implemented in CI |
 | Linux build/test | Implemented in CI |
-| Windows build/test | Windows build/test is not claimed yet; the initial Makefile stops on Windows until a MSVC/node-gyp or equivalent build lane is implemented. |
+| Windows build/test | Implemented in CI with MSVC via `scripts/build-native.js`; runtime sender creation may still skip if the host backend is unavailable. |
 | Source discovery | Implemented through `nozzle_enumerate_senders(...)` |
 | Receiver lifecycle/status | Implemented through `nozzle_receiver_create(...)`, `nozzle_receiver_get_connected_info(...)`, and `nozzle_receiver_destroy(...)` |
 | CPU frame access | CPU frame access is not exposed in this initial package. It needs explicit copy-cost, format, and stride documentation before becoming API. |
@@ -33,7 +33,7 @@ npm run check:package
 ```
 
 Linux requires the same native development libraries as nozzle's Linux backend:
-`libdrm`, `gbm`, `EGL`, and `GL` development packages.
+`libdrm`, `gbm`, `EGL`, and `GL` development packages. Windows builds require an MSVC developer environment; GitHub Actions configures it with `ilammy/msvc-dev-cmd@v1`.
 
 ## API
 

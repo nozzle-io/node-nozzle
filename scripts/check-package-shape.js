@@ -39,7 +39,8 @@ for (const phrase of [
   'No npm publication has been performed',
   'No Electron/WebGL/WebGPU texture sharing is claimed',
   'CPU frame access is not exposed in this initial package',
-  'Windows build/test is not claimed yet',
+  'Windows build/test',
+  'MSVC',
 ]) {
   assert.ok(readme.includes(phrase), `README missing phrase: ${phrase}`);
 }
