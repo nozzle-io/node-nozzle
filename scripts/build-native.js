@@ -120,6 +120,15 @@ async function ensure_windows_node_lib() {
   return downloaded;
 }
 
+function read_core_sources(nozzle, group) {
+  const list_path = path.join(root, nozzle, 'sources', `${group}.txt`);
+  const entries = fs.readFileSync(list_path, 'utf8').split(/\r?\n/).filter((line) => line.length > 0);
+  if (entries.length === 0) {
+    throw new Error(`${list_path} is empty`);
+  }
+  return entries.map((file) => path.join(nozzle, file));
+}
+
 function to_obj_name(source) {
   return path.join(build_dir, source.replace(/[\\/:.]/g, '_') + '.obj');
 }
@@ -133,33 +142,8 @@ async function build_windows() {
   fs.mkdirSync(addon_dir, { recursive: true });
 
   const nozzle = 'deps/nozzle';
-  const common_sources = [
-    'src/common/ipc.cpp',
-    'src/common/registry.cpp',
-    'src/common/sender.cpp',
-    'src/common/receiver.cpp',
-    'src/common/frame.cpp',
-    'src/common/texture.cpp',
-    'src/common/device.cpp',
-    'src/common/discovery.cpp',
-    'src/common/metadata.cpp',
-    'src/common/pixel_access.cpp',
-    'src/common/channel_swizzle.cpp',
-    'src/common/format_convert.cpp',
-    'src/common/format_convert_sse2.cpp',
-    'src/common/format_convert_f16c.cpp',
-    'src/common/format_convert_neon.cpp',
-    'src/common/format_resolve.cpp',
-    'src/common/backend_capabilities.cpp',
-    'src/c_api/nozzle_c.cpp'
-  ].map((file) => path.join(nozzle, file));
-
-  const windows_sources = [
-    path.join(nozzle, 'src/backends/d3d11/d3d11_backend.cpp'),
-    path.join(nozzle, 'src/backends/d3d11/d3d11_texture.cpp'),
-    path.join(nozzle, 'src/backends/d3d11/d3d11_sync.cpp'),
-    'src/native/nozzle_node.cpp'
-  ];
+  const common_sources = read_core_sources(nozzle, 'common');
+  const windows_sources = read_core_sources(nozzle, 'windows').concat('src/native/nozzle_node.cpp');
 
   const sources = common_sources.concat(windows_sources);
   const node_include = await ensure_windows_node_headers();
