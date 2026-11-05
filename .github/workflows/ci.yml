@@ -44,3 +44,18 @@ jobs:
 
       - name: Check package shape
         run: npm run check:package
+
+      # nozzle-dev#197: `-shared` links with undefined symbols allowed, so a core source
+      # missing from the Makefile's hand-written list leaves a green build that fails
+      # at runtime. Force the F16C path whatever the image's default is, then prove
+      # no core symbol is left unresolved and the F16C object is actually linked.
+      - name: Verify core symbols resolve with F16C enabled
+        if: runner.os == 'Linux'
+        run: |
+          make ADDON_DIR=.build-f16c/addon BUILD_DIR=.build-f16c CXX="c++ -mf16c"
+          undefined=$(nm -DC --undefined-only .build-f16c/addon/nozzle_node.node)
+          if grep -F nozzle <<<"$undefined"; then
+            echo "unresolved core symbols in .build-f16c/addon/nozzle_node.node" >&2
+            exit 1
+          fi
+          nm -C .build-f16c/addon/nozzle_node.node | grep -F ' T nozzle::detail::widen_half_to_float_f16c'

@@ -147,6 +147,7 @@ async function build_windows() {
     'src/common/channel_swizzle.cpp',
     'src/common/format_convert.cpp',
     'src/common/format_convert_sse2.cpp',
+    'src/common/format_convert_f16c.cpp',
     'src/common/format_convert_neon.cpp',
     'src/common/format_resolve.cpp',
     'src/common/backend_capabilities.cpp',
