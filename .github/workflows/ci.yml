@@ -59,3 +59,25 @@ jobs:
             exit 1
           fi
           nm -C .build-f16c/addon/nozzle_node.node | grep -F ' T nozzle::detail::widen_half_to_float_f16c'
+
+      # nozzle-dev#198: add a source through core's list, then take it out again in the
+      # same build directory. The output must gain the source, then lose it.
+      - name: Verify a source list change rebuilds the library
+        if: runner.os == 'Linux'
+        run: |
+          list=deps/nozzle/sources/common.txt
+          sentinel=deps/nozzle/src/common/ci_sentinel.cpp
+          cp "$list" "$RUNNER_TEMP/common.txt"
+          echo 'extern "C" int nozzle_ci_sentinel() { return 1; }' > "$sentinel"
+          echo src/common/ci_sentinel.cpp >> "$list"
+          make ADDON_DIR=.build-incr/addon BUILD_DIR=.build-incr
+          symbols=$(nm -C .build-incr/libnozzle.a)
+          grep -F nozzle_ci_sentinel <<<"$symbols"
+          cp "$RUNNER_TEMP/common.txt" "$list"
+          make ADDON_DIR=.build-incr/addon BUILD_DIR=.build-incr
+          symbols=$(nm -C .build-incr/libnozzle.a)
+          if grep -F nozzle_ci_sentinel <<<"$symbols"; then
+            echo "the sentinel is still in the output after leaving the list" >&2
+            exit 1
+          fi
+          rm "$sentinel"
