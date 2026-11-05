@@ -58,4 +58,4 @@ jobs:
             echo "unresolved core symbols in .build-f16c/addon/nozzle_node.node" >&2
             exit 1
           fi
-          nm -C .build-f16c/libnozzle.a | grep -F ' T nozzle::detail::widen_half_to_float_f16c'
+          nm -C .build-f16c/addon/nozzle_node.node | grep -F ' T nozzle::detail::widen_half_to_float_f16c'
