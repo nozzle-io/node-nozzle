@@ -34,6 +34,7 @@ COMMON_SRCS := \
 	$(NOZZLE_DIR)/src/common/channel_swizzle.cpp \
 	$(NOZZLE_DIR)/src/common/format_convert.cpp \
 	$(NOZZLE_DIR)/src/common/format_convert_sse2.cpp \
+	$(NOZZLE_DIR)/src/common/format_convert_f16c.cpp \
 	$(NOZZLE_DIR)/src/common/format_convert_neon.cpp \
 	$(NOZZLE_DIR)/src/common/format_resolve.cpp \
 	$(NOZZLE_DIR)/src/common/backend_capabilities.cpp \
