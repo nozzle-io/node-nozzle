@@ -17,7 +17,7 @@ No npm publication has been performed for this initial implementation.
 | Linux build/test | Implemented in CI |
 | Windows build/test | Implemented in CI with MSVC via `scripts/build-native.js`; runtime sender creation may still skip if the host backend is unavailable. |
 | Source discovery | Implemented through `nozzle_enumerate_senders(...)` |
-| Receiver lifecycle/status | Implemented through `nozzle_receiver_create(...)`, `nozzle_receiver_get_connected_info(...)`, and `nozzle_receiver_destroy(...)` |
+| Receiver lifecycle/status | Implemented through `nozzle_receiver_create(...)`, `nozzle_receiver_get_connected_info_snapshot(...)`, and `nozzle_receiver_destroy(...)` |
 | CPU frame access | CPU frame access is not exposed in this initial package. It needs explicit copy-cost, format, and stride documentation before becoming API. |
 | Electron/WebGL/WebGPU GPU textures | No Electron/WebGL/WebGPU texture sharing is claimed. Electron texture work belongs in a separate implementation spike. |
 | npm publication | Not published; requires a separate maintainer decision. |
@@ -77,7 +77,42 @@ interface ReceiverStatus {
 }
 ```
 
-Creating a receiver for a missing sender throws `NozzleError` with a deterministic native `code`, such as `NOZZLE_ERROR_SENDER_NOT_FOUND`. Once a receiver exists, `status()` reports connection state without claiming a frame path that has not been proven.
+Creating a receiver for a missing sender throws `NozzleError` with a deterministic native `code`, such as `NOZZLE_ERROR_SENDER_NOT_FOUND`.
+
+`status()` copies a complete owned native snapshot. Inline identity strings use
+capacity-bounded UTF-8 lengths and the existing N-API conversion; scalar Number
+and BigInt fields and the JS object shape are unchanged. Returned objects remain
+valid after later status calls and receiver/sender destruction. Discovery still
+uses its separately owned enumeration array and is not changed by this path.
+
+On a successful snapshot, `connected` contains metadata only when the native
+connection flag is nonzero. A false flag returns `connected: null` without
+inventing a `lastError`. Existing native-error branches retain their error
+behavior. `closed` denotes local receiver destruction, not sender liveness.
+
+The snapshot reports last-observed state, not a fresh liveness check. This
+package exposes no frame acquisition method, so polling `status()` alone does
+not guarantee prompt observation of sender exit or reconnect. This change does
+not add a thread-safety or frame-access contract. The native addon now requires
+the `nozzle_receiver_get_connected_info_snapshot` core export, provided by the
+pinned core; there is no borrowed-getter fallback.
+
+### Metadata Test Boundary
+
+The existing Node 20/22 CI matrix builds the native addon on macOS, Windows and
+Linux. A separate required macOS case in `test/discovery.test.js` uses the
+existing real native sender helper, fails on missing backend support, and checks
+UTF-8 sender identity and owned status values after later calls and both closes.
+The helper's fixed ASCII application name is checked without extending its API.
+Other platforms explicitly exclude this case; existing optional tests keep their
+skip behavior. No GPU frame, pixel, or cross-process coverage is claimed.
+
+The successful-snapshot/false-flag branch cannot be driven through the current
+public receiver API without acquisition. It remains a static-review coverage
+gap, not a claimed runtime reproduction. The test's `closed: true` assertion
+exercises local handle destruction, not this native false-flag branch. The
+metadata test checks Number/BigInt types and retained values, not high-counter
+or fractional-FPS runtime evidence.
 
 ## Error behavior
 
