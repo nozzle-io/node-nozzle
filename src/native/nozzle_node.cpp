@@ -92,18 +92,27 @@ napi_value make_sender_info(napi_env env, const NozzleSenderInfo &info) {
     return object;
 }
 
-napi_value make_connected_info(napi_env env, const NozzleConnectedSenderInfo &info) {
+template <size_t capacity>
+size_t snapshot_string_length(const char (&text)[capacity]) {
+    size_t length = 0;
+    while (length < capacity && text[length] != '\0') {
+        ++length;
+    }
+    return length;
+}
+
+napi_value make_connected_info(napi_env env, const NozzleConnectedSenderSnapshot &info) {
     napi_value object;
     napi_create_object(env, &object);
 
     napi_value value;
-    napi_create_string_utf8(env, info.name ? info.name : "", NAPI_AUTO_LENGTH, &value);
+    napi_create_string_utf8(env, info.name, snapshot_string_length(info.name), &value);
     napi_set_named_property(env, object, "name", value);
 
-    napi_create_string_utf8(env, info.application_name ? info.application_name : "", NAPI_AUTO_LENGTH, &value);
+    napi_create_string_utf8(env, info.application_name, snapshot_string_length(info.application_name), &value);
     napi_set_named_property(env, object, "applicationName", value);
 
-    napi_create_string_utf8(env, info.id ? info.id : "", NAPI_AUTO_LENGTH, &value);
+    napi_create_string_utf8(env, info.id, snapshot_string_length(info.id), &value);
     napi_set_named_property(env, object, "id", value);
 
     napi_create_int32(env, static_cast<int32_t>(info.backend), &value);
@@ -321,10 +330,15 @@ napi_value receiver_status(napi_env env, napi_callback_info info) {
         return status;
     }
 
-    NozzleConnectedSenderInfo connected_info{};
-    NozzleErrorCode code = nozzle_receiver_get_connected_info(handle->receiver, &connected_info);
+    NozzleConnectedSenderSnapshot connected_info{};
+    NozzleErrorCode code = nozzle_receiver_get_connected_info_snapshot(handle->receiver, &connected_info);
     if (code == NOZZLE_OK) {
-        napi_value connected = make_connected_info(env, connected_info);
+        napi_value connected;
+        if (connected_info.connected != 0) {
+            connected = make_connected_info(env, connected_info);
+        } else {
+            napi_get_null(env, &connected);
+        }
         napi_set_named_property(env, status, "connected", connected);
     } else if (code == NOZZLE_ERROR_SENDER_NOT_FOUND || code == NOZZLE_ERROR_SENDER_CLOSED || code == NOZZLE_ERROR_TIMEOUT) {
         napi_value connected;
@@ -335,7 +349,7 @@ napi_value receiver_status(napi_env env, napi_callback_info info) {
         napi_create_string_utf8(env, error_name(code), NAPI_AUTO_LENGTH, &last_error);
         napi_set_named_property(env, status, "lastError", last_error);
     } else {
-        throw_nozzle_error(env, code, "nozzle_receiver_get_connected_info");
+        throw_nozzle_error(env, code, "nozzle_receiver_get_connected_info_snapshot");
         return nullptr;
     }
 

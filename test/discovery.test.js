@@ -72,3 +72,54 @@ test('receiver creation for a missing source reports a deterministic native erro
 test('receiver rejects empty source names deterministically', () => {
   assert.throws(() => new Receiver(''), /sourceName must be a non-empty string/);
 });
+
+test('required macOS native status owns UTF8 metadata after later calls and closure', {
+  skip: process.platform === 'darwin' ? false : 'macOS metadata runtime coverage only',
+}, () => {
+  const name = `node193-${process.pid}-${Date.now()}-\u65e5\u672c\u{1f680}`;
+  assert.ok(Buffer.byteLength(name, 'utf8') <= 63);
+  // This existing helper creates a real sender; backend failures must fail here.
+  const sender = native.createTestSenderNative(name);
+  let receiver;
+  try {
+    receiver = new Receiver(name, { applicationName: 'node193-reader' });
+    const status = receiver.status();
+    assert.deepEqual(Object.keys(status).sort(), ['closed', 'connected']);
+    assert.equal(status.closed, false);
+    assert.ok(status.connected);
+    const info = status.connected;
+    assert.deepEqual(Object.keys(info).sort(), [
+      'name', 'applicationName', 'id', 'backend', 'width', 'height', 'format',
+      'semanticFormat', 'estimatedFps', 'frameCounter', 'lastUpdateTimeNs',
+      'nativeFormatKind', 'nativeFormatValue', 'nativeFormatModifier',
+    ].sort());
+    assert.equal(info.name, name);
+    assert.equal(info.applicationName, 'node-nozzle-test');
+    assert.equal(typeof info.id, 'string');
+    assert.ok(info.id.length > 0);
+    assert.equal(info.backend, 2); // NOZZLE_BACKEND_METAL
+    for (const field of ['width', 'height', 'format', 'semanticFormat',
+      'estimatedFps', 'nativeFormatKind', 'nativeFormatValue']) {
+      assert.equal(typeof info[field], 'number', field);
+    }
+    for (const field of ['frameCounter', 'lastUpdateTimeNs', 'nativeFormatModifier']) {
+      assert.equal(typeof info[field], 'bigint', field);
+    }
+    const retained = { ...info };
+    assert.deepEqual(receiver.status(), status);
+    receiver.close();
+    native.destroyTestSenderNative(sender);
+
+    assert.deepEqual(status, { closed: false, connected: retained });
+    assert.equal(info.name, name);
+    assert.equal(info.applicationName, 'node-nozzle-test');
+    assert.deepEqual(receiver.status(), { closed: true, connected: null });
+    // closed above is local destruction, not an observed native disconnect.
+  } finally {
+    try {
+      if (receiver) receiver.close();
+    } finally {
+      native.destroyTestSenderNative(sender);
+    }
+  }
+});
