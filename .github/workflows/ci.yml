@@ -49,16 +49,26 @@ jobs:
       # missing from the Makefile's hand-written list leaves a green build that fails
       # at runtime. Force the F16C path whatever the image's default is, then prove
       # no core symbol is left unresolved and the F16C object is actually linked.
-      - name: Verify core symbols resolve with F16C enabled
+      - name: Verify private core and N-API exports with F16C enabled
         if: runner.os == 'Linux'
         run: |
           make ADDON_DIR=.build-f16c/addon BUILD_DIR=.build-f16c CXX="c++ -mf16c"
+          # nozzle-dev#209: inspect both production and F16C DSOs, not the archive.
+          for library in build/Release/nozzle_node.node .build-f16c/addon/nozzle_node.node; do
+            exported=$(nm -DC --defined-only "$library")
+            if grep -E 'nozzle::|[[:space:]]nozzle_[[:alnum:]_]+$' <<<"$exported"; then
+              echo "exported core symbols in $library" >&2
+              exit 1
+            fi
+            grep -E ' T napi_register_module_v1$' <<<"$exported"
+            grep -E ' T node_api_module_get_api_version_v1$' <<<"$exported"
+          done
           undefined=$(nm -DC --undefined-only .build-f16c/addon/nozzle_node.node)
           if grep -F nozzle <<<"$undefined"; then
             echo "unresolved core symbols in .build-f16c/addon/nozzle_node.node" >&2
             exit 1
           fi
-          nm -C .build-f16c/addon/nozzle_node.node | grep -F ' T nozzle::detail::widen_half_to_float_f16c'
+          nm -C .build-f16c/addon/nozzle_node.node | grep -E ' [Tt] nozzle::detail::widen_half_to_float_f16c'
 
       # nozzle-dev#198: add a source through core's list, then take it out again in the
       # same build directory. The output must gain the source, then lose it.

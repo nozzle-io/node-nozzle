@@ -35,7 +35,7 @@ endif
 ifeq ($(PLATFORM),linux)
 	CXXFLAGS += -DNOZZLE_PLATFORM_LINUX=1 -DNOZZLE_HAS_DMA_BUF=1 -DNOZZLE_HAS_OPENGL=1
 	PLATFORM_SRCS := $(NOZZLE_LINUX_SRCS)
-	ADDON_LDFLAGS := -shared -ldrm -lgbm -lEGL -lGL -lstdc++
+	ADDON_LDFLAGS := -shared -Wl,--exclude-libs,libnozzle.a -ldrm -lgbm -lEGL -lGL -lstdc++
 endif
 
 ifeq ($(PLATFORM),windows)
